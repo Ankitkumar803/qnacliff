@@ -1,0 +1,6 @@
+sentence_transformers
+sagemaker 
+langchain 
+InstructorEmbedding 
+chromadb
+boto3
