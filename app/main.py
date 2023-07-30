@@ -74,7 +74,7 @@ def assess_diversification(question:Question, company:Company, max_new_token: MA
         
         # in case if end-point starting with "qna-falcon-7b-22112000-" is not there 
         ENDPOINT = "End-point starting with qna-falcon-7b-22112000- is not found"
-        
+        import boto3
         # Get the SageMaker client
         sagemaker_client = boto3.client('sagemaker')
         # List all of the endpoints
