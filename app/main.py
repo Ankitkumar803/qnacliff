@@ -33,11 +33,11 @@ print(client.list_collections())
 @app.post("/qna")
 def assess_diversification(question:Question, company:Company, max_new_token: MAX_NEW_TOKEN ):
     try:
-       
+        print(question.question, type(question.question) , company.company, max_new_token.max_new_token , type(max_new_token.max_new_token))
         print(question , company , max_new_token)
         print(type(question) , type(company) , type(max_new_token))
         try:
-            print(type(str(question)))
+            print(type(str(question)), str(question))
         except:
             pass
         # query = question
