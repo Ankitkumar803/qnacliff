@@ -31,15 +31,15 @@ client.list_collections()
 @app.post("/qna")
 def assess_diversification(question:Question, company:Company ):
     try:
-        query = "what intivative are taken in Rural tourism"    
-        db = Chroma(client=client, collection_name="Tourism-mini" , embedding_function=instructor_embeddings)
+        # query = "what intivative are taken in Rural tourism"    
+        db = Chroma(client=client, collection_name= company , embedding_function=instructor_embeddings)
         docs = db.similarity_search(query, k=3 ) # k = 3
         print(docs[0].page_content)
         
         context = ""
         for doc in docs:
             context += "\n" + doc.page_content
-        question = query  
+        question = question  
         template = """<|prompt|>Use the following pieces of context to answer the question at the end, don't use information outside the context.
 
         If you don't know the answer, just say that you don't know, don't try to make up an answer. 
