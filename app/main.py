@@ -35,6 +35,11 @@ def assess_diversification(question:Question, company:Company, max_new_token: MA
     try:
        
         print(question , company , max_new_token)
+        print(type(question) , type(company) , type(max_new_token))
+        try:
+            print(type(str(question)))
+        except:
+            pass
         # query = question
         query = "In what all sectors does this company works?"
         company1 = 'Tata_motors-mini'
@@ -90,7 +95,7 @@ def assess_diversification(question:Question, company:Company, max_new_token: MA
         
         # send request to endpoint
         # response = llm.predict(payload)
-        import boto3
+        # import boto3
         runtime = boto3.client('runtime.sagemaker')
         response = runtime.invoke_endpoint(EndpointName=ENDPOINT,
                                             ContentType= 'application/json',
