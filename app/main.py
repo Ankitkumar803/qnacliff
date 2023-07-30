@@ -35,8 +35,8 @@ def assess_diversification(question:Question, company:Company, max_new_token: MA
     try:
         query = question
         print(question , company , max_new_token)
-        
-        db = Chroma(client=client, collection_name= company , embedding_function=instructor_embeddings)
+        company1 = 'Tata_motors-mini'
+        db = Chroma(client=client, collection_name= company1 , embedding_function=instructor_embeddings)
         docs = db.similarity_search(query, k=3 ) # k = 3
         print(docs[0].page_content)
         
