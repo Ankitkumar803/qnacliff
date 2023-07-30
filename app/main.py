@@ -33,8 +33,10 @@ print(client.list_collections())
 @app.post("/qna")
 def assess_diversification(question:Question, company:Company, max_new_token: MAX_NEW_TOKEN ):
     try:
-        query = question
+       
         print(question , company , max_new_token)
+        # query = question
+        query = "In what all sectors does this company works?"
         company1 = 'Tata_motors-mini'
         db = Chroma(client=client, collection_name= company1 , embedding_function=instructor_embeddings)
         docs = db.similarity_search(query, k=3 ) # k = 3
@@ -62,7 +64,7 @@ def assess_diversification(question:Question, company:Company, max_new_token: MA
             "do_sample": True,
             "top_p": 0.9,
             "temperature": 0.5,
-            "max_new_tokens": max_new_token ,   # defalut = 20 , max = 512 ,      input + output = 1512 limit
+            "max_new_tokens": 200,  #max_new_token ,   # defalut = 20 , max = 512 ,      input + output = 1512 limit
             "repetition_penalty": 1.03 ,
             "stop": ["\nUser:","<|endoftext|>","</s>"],
             "return_full_text":False
