@@ -18,6 +18,8 @@ class Question(BaseModel):
     question: str
 class Company(BaseModel):
     company: str
+class MAX_NEW_TOKEN(BaseModel):
+    max_new_token: int
     
 instructor_embeddings = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
 
@@ -29,7 +31,7 @@ print(client.list_collections())
 
 
 @app.post("/qna")
-def assess_diversification(question:Question, company:Company ):
+def assess_diversification(question:Question, company:Company, max_new_token: MAX_NEW_TOKEN ):
     try:
         query = "what intivative are taken in Rural tourism"    
         db = Chroma(client=client, collection_name= company , embedding_function=instructor_embeddings)
@@ -58,7 +60,7 @@ def assess_diversification(question:Question, company:Company ):
             "do_sample": True,
             "top_p": 0.9,
             "temperature": 0.5,
-            "max_new_tokens": 200,   # defalut = 20 , max = 512 ,      input + output = 1512 limit
+            "max_new_tokens": max_new_token ,   # defalut = 20 , max = 512 ,      input + output = 1512 limit
             "repetition_penalty": 1.03 ,
             "stop": ["\nUser:","<|endoftext|>","</s>"],
             "return_full_text":False
