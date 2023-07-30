@@ -24,7 +24,7 @@ instructor_embeddings = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-
 # chroma db client
 client = chromadb.HttpClient(host="13.232.139.161", port=8000)
 # list all collections
-client.list_collections()
+print(client.list_collections())
 
 
 
@@ -32,14 +32,14 @@ client.list_collections()
 def assess_diversification(question:Question, company:Company ):
     try:
         query = "what intivative are taken in Rural tourism"    
-        db = Chroma(client=client, collection_name="Tourism-mini" , embedding_function=instructor_embeddings)
+        db = Chroma(client=client, collection_name= company , embedding_function=instructor_embeddings)
         docs = db.similarity_search(query, k=3 ) # k = 3
         print(docs[0].page_content)
         
         context = ""
         for doc in docs:
             context += "\n" + doc.page_content
-        question = query  
+        question = question  
         template = """<|prompt|>Use the following pieces of context to answer the question at the end, don't use information outside the context.
 
         If you don't know the answer, just say that you don't know, don't try to make up an answer. 
@@ -53,18 +53,35 @@ def assess_diversification(question:Question, company:Company ):
 
         # hyperparameters for llm
         payload = {
-        "inputs": prompt,
-        "parameters": {
+          "inputs": prompt,
+          "parameters": {
             "do_sample": True,
             "top_p": 0.9,
             "temperature": 0.5,
-            "max_new_tokens": 512,   # 1512 limit
+            "max_new_tokens": 200,   # defalut = 20 , max = 512 ,      input + output = 1512 limit
             "repetition_penalty": 1.03 ,
-            "stop": ["\nUser:","<|endoftext|>","</s>"]
-        }
+            "stop": ["\nUser:","<|endoftext|>","</s>"],
+            "return_full_text":False
+          }
         }
 
-        ENDPOINT ="huggingface-pytorch-tgi-inference-2023-07-24-20-57-47-705"
+        
+        # in case if end-point starting with "qna-falcon-7b-22112000-" is not there 
+        ENDPOINT = "End-point starting with qna-falcon-7b-22112000- is not found"
+        
+        # Get the SageMaker client
+        sagemaker_client = boto3.client('sagemaker')
+        # List all of the endpoints
+        endpoints = sagemaker_client.list_endpoints()
+        # Filter the list to only include endpoints that are in the "InService" status
+        in_service_endpoints = sagemaker_client.list_endpoints(StatusEquals='InService')
+        
+        for endpoint in in_service_endpoints['Endpoints']:
+            if "qna-falcon-7b-22112000-" in endpoint['EndpointName']:
+                ENDPOINT = endpoint['EndpointName']
+        print(ENDPOINT)
+
+        
         # send request to endpoint
         # response = llm.predict(payload)
         import boto3
@@ -74,7 +91,7 @@ def assess_diversification(question:Question, company:Company ):
                                             Body=json.dumps(payload))
         result = json.loads(response['Body'].read().decode())
 
-        assistant = result[0]["generated_text"][len(prompt):]
+        assistant = result[0]["generated_text"]
         print(assistant)      
         return {
             assistant
