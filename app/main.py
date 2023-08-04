@@ -1,6 +1,5 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-
 from langchain.embeddings.sentence_transformer import SentenceTransformerEmbeddings
 import json
 import sagemaker
@@ -11,6 +10,11 @@ from langchain.vectorstores import Chroma
 import chromadb
 from chromadb.config import Settings
 from langchain.vectorstores import Chroma
+from langchain import PromptTemplate, SagemakerEndpoint
+from langchain.llms.sagemaker_endpoint import LLMContentHandler
+from langchain.chains.question_answering import load_qa_chain
+import json
+from typing import Dict
 
 app = FastAPI()
 
@@ -21,63 +25,17 @@ class Company(BaseModel):
 class MAX_NEW_TOKEN(BaseModel):
     max_new_token: int
     
-instructor_embeddings = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
-
-# chroma db client
-client = chromadb.HttpClient(host="13.232.139.161", port=8000)
-# list all collections
-print(client.list_collections())
+embedding_function = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
 
 
 
 @app.post("/qna")
 def assess_diversification(question_user:Question_user, company:Company, max_new_token: MAX_NEW_TOKEN ):
     try:
-        
-
-        query = question_user.question_user
-        # query = "In what all sectors does this company works?"
-        # company1 = 'Tata_motors-mini'
-        db = Chroma(client=client, collection_name= company.company , embedding_function=instructor_embeddings)
-        docs = db.similarity_search(query, k=3 ) # k = 3
-        print(docs[0].page_content)
-        
-        context = ""
-        for doc in docs:
-            context += "\n" + doc.page_content
-        question = query 
-        template = """<|prompt|>Use the following pieces of context to answer the question at the end, don't use information outside the context.
-
-        If you don't know the answer, just say that you don't know, don't try to make up an answer. 
-
-
-        {context}
-        Question: {question}
-        Helpful Answer:<|endoftext|><|answer|>"""
-        prompt = template.format(context=context, question=question)
-
-        MAX_NEW_TOKENS = max_new_token.max_new_token
-        if MAX_NEW_TOKENS == 0:
-            MAX_NEW_TOKENS = 200
-        print(MAX_NEW_TOKENS)
-        
-        # hyperparameters for llm
-        payload = {
-          "inputs": prompt,
-          "parameters": {
-            "do_sample": True,
-            "top_p": 0.9,
-            "temperature": 0.5,
-            "max_new_tokens": MAX_NEW_TOKENS ,   # defalut = 20 , max = 512 ,      input + output = 1512 limit
-            "repetition_penalty": 1.03 ,
-            "stop": ["\nUser:","<|endoftext|>","</s>"],
-            "return_full_text":False
-          }
-        }
 
         
         # in case if end-point starting with "qna-falcon-7b-22112000-" is not there 
-        ENDPOINT = "End-point starting with qna-falcon-7b-22112000- is not found"
+        ENDPOINT = "End-point starting with qna-llama-7b-22112000- is not found"
         import boto3
         # Get the SageMaker client
         sagemaker_client = boto3.client('sagemaker')
@@ -85,26 +43,89 @@ def assess_diversification(question_user:Question_user, company:Company, max_new
         endpoints = sagemaker_client.list_endpoints()
         # Filter the list to only include endpoints that are in the "InService" status
         in_service_endpoints = sagemaker_client.list_endpoints(StatusEquals='InService')
-        
+
         for endpoint in in_service_endpoints['Endpoints']:
-            if "qna-falcon-7b-22112000-" in endpoint['EndpointName']:
+            if "qna-llama-7b-22112000-" in endpoint['EndpointName']:
                 ENDPOINT = endpoint['EndpointName']
         print(ENDPOINT)
 
-        
-        # send request to endpoint
-        # response = llm.predict(payload)
-        # import boto3
-        runtime = boto3.client('runtime.sagemaker')
-        response = runtime.invoke_endpoint(EndpointName=ENDPOINT,
-                                            ContentType= 'application/json',
-                                            Body=json.dumps(payload))
-        result = json.loads(response['Body'].read().decode())
 
-        assistant = result[0]["generated_text"]
-        print(assistant)      
+        MAX_NEW_TOKENS = max_new_token.max_new_token
+        if MAX_NEW_TOKENS == 0:
+            MAX_NEW_TOKENS = 512
+        print(MAX_NEW_TOKENS)
+
+
+                
+        #hosted on sagemaker
+        endpoint = ENDPOINT
+
+
+        class ContentHandler(LLMContentHandler):
+                content_type = "application/json"
+                accepts = "application/json"
+
+                # def transform_input(self, prompt: str, model_kwargs: Dict) -> bytes:
+                #     input_str = json.dumps({"inputs": prompt, **model_kwargs})
+                #     return input_str.encode('utf-8')
+
+                def transform_input(self, prompt: str , model_kwargs: Dict) -> bytes:
+                    request = {'inputs': prompt,
+                                "parameters": { "do_sample": True,
+                                            "top_p": 0.9,
+                                            "temperature": 0.85,
+                                            "max_new_tokens": MAX_NEW_TOKENS,
+                                            "stop": ["<|endoftext|>", "</s>"],
+                                            "return_full_text":False,
+                                            "repetition_penalty": 1.03  #,
+                                            # "early_stopping": True
+                                                }, **model_kwargs}
+
+                    input_str = json.dumps(request)
+                    print(input_str)
+                    return input_str.encode('utf-8')
+
+                def transform_output(self, output: bytes) -> str:
+                    response_json = json.loads(output.read().decode("utf-8"))
+                    return response_json[0]['generated_text']
+
+        content_handler = ContentHandler()
+
+        sm_llm=SagemakerEndpoint(
+                endpoint_name=endpoint,
+            credentials_profile_name="default",
+                region_name="ap-south-1",
+                # model_kwargs= parameters,
+                content_handler=content_handler,
+            )
+
+        print("sm_llm: ", sm_llm)
+
+        import chromadb
+        from chromadb.config import Settings
+        from langchain.vectorstores import Chroma
+        from langchain.chains import RetrievalQA
+
+
+        client = chromadb.HttpClient(host="13.232.139.161", port=8000)
+        vectordb = Chroma(client=client, collection_name= company.company , embedding_function=embedding_function)
+
+
+        # vectordb = Chroma(persist_directory="db", embedding_function=embedding, collection_name="docs")
+        retriever = vectordb.as_retriever(search_kwargs={'k':5})
+        print("retriever: ", retriever)
+
+        qa_chain = RetrievalQA.from_chain_type(llm=sm_llm,
+                                        chain_type="stuff",
+                                        retriever=retriever,
+                                        return_source_documents=True)
+
+        ans = qa_chain(question_user.question_user)
+        print("************************")
+        print(ans["result"])
+
         return {
-            assistant
+            ans["result"]
         }
     
     except Exception as e:
